@@ -10,7 +10,12 @@ class SoundManager {
   }
 
   init() {
-    if (this.ctx) return;
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+      return;
+    }
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (AudioContext) {
       this.ctx = new AudioContext();

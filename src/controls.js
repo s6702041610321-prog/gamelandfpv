@@ -72,8 +72,16 @@ export class FPVController {
     });
 
     // Keyboard down & up
-    window.addEventListener('keydown', (e) => this.onKeyChange(e.code, true));
-    window.addEventListener('keyup', (e) => this.onKeyChange(e.code, false));
+    window.addEventListener('keydown', (e) => {
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        e.preventDefault();
+      }
+      this.onKeyChange(e.code, true);
+    });
+
+    window.addEventListener('keyup', (e) => {
+      this.onKeyChange(e.code, false);
+    });
   }
 
   onKeyChange(code, isPressed) {
@@ -104,7 +112,7 @@ export class FPVController {
         this.keys.crouch = isPressed;
         break;
       case 'Space':
-        if (isPressed && this.isGrounded) {
+        if (isPressed && (this.isGrounded || this.position.y <= 0.2)) {
           this.velocity.y = this.jumpForce;
           this.isGrounded = false;
           soundManager.playJump();
@@ -177,18 +185,19 @@ export class FPVController {
     // Apply Gravity
     this.velocity.y += this.gravity * delta;
 
-    // 5. Horizontal Collisions (4 Raycasts around player)
+    // 5. Horizontal Collisions (Wall Detection - ignores floor slopes)
     const playerCenter = this.position.clone().add(new THREE.Vector3(0, this.currentHeight * 0.5, 0));
     const nextHorizontalMove = new THREE.Vector3(this.velocity.x * delta, 0, this.velocity.z * delta);
     const moveDist = nextHorizontalMove.length();
 
     if (moveDist > 0.001 && this.collidableObjects.length > 0) {
       const dir = nextHorizontalMove.clone().normalize();
-      const raycaster = new THREE.Raycaster(playerCenter, dir, 0, moveDist + 0.6);
+      const raycaster = new THREE.Raycaster(playerCenter, dir, 0, moveDist + 0.5);
       const hits = raycaster.intersectObjects(this.collidableObjects, true);
 
-      if (hits.length > 0) {
-        // Prevent walking into object wall
+      // Only block horizontal movement if hitting a steep wall (face normal y < 0.7)
+      const wallHit = hits.find(h => h.face && Math.abs(h.face.normal.y) < 0.7);
+      if (wallHit) {
         this.velocity.x = 0;
         this.velocity.z = 0;
       }
@@ -199,18 +208,18 @@ export class FPVController {
     this.position.z += this.velocity.z * delta;
     this.position.y += this.velocity.y * delta;
 
-    // 6. Vertical Collision (Ground Check Raycast) - Safe Ground Detection
+    // 6. Vertical Collision (Ground Check Raycast - ONLY snap when falling/moving down)
     const rayOrigin = new THREE.Vector3(this.position.x, this.position.y + 0.8, this.position.z);
     this.downRaycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
     if (this.collidableObjects.length > 0) {
       const intersects = this.downRaycaster.intersectObjects(this.collidableObjects, true);
 
-      // Find the first valid ground surface below feet (normal pointing up, height <= feet + 0.4)
+      // Find the first valid ground surface below feet
       let validGroundHit = null;
       for (let i = 0; i < intersects.length; i++) {
         const hit = intersects[i];
-        if (hit.point && hit.point.y <= this.position.y + 0.4) {
+        if (hit.point && hit.point.y <= this.position.y + 0.3) {
           validGroundHit = hit;
           break;
         }
@@ -218,7 +227,8 @@ export class FPVController {
 
       if (validGroundHit) {
         const groundHeight = validGroundHit.point.y;
-        if (this.position.y <= groundHeight + 0.1) {
+        // CRITICAL FIX: Only snap to ground when falling down (velocity.y <= 0)
+        if (this.velocity.y <= 0 && this.position.y <= groundHeight + 0.15) {
           this.position.y = groundHeight;
           this.velocity.y = 0;
           this.isGrounded = true;
@@ -226,7 +236,7 @@ export class FPVController {
           this.isGrounded = false;
         }
       } else {
-        if (this.position.y <= 0) {
+        if (this.velocity.y <= 0 && this.position.y <= 0) {
           this.position.y = 0;
           this.velocity.y = 0;
           this.isGrounded = true;
@@ -235,7 +245,7 @@ export class FPVController {
         }
       }
     } else {
-      if (this.position.y <= 0) {
+      if (this.velocity.y <= 0 && this.position.y <= 0) {
         this.position.y = 0;
         this.velocity.y = 0;
         this.isGrounded = true;
