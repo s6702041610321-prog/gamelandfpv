@@ -37,11 +37,12 @@ let currentSkyMode = 'DAY';
 scene.background = new THREE.Color(skyColors.DAY);
 scene.fog = new THREE.Fog(skyColors.DAY, 120, 450);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const getAspect = () => (window.innerWidth && window.innerHeight) ? (window.innerWidth / window.innerHeight) : (16 / 9);
+const camera = new THREE.PerspectiveCamera(75, getAspect(), 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth || 1280, window.innerHeight || 720);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -74,40 +75,71 @@ scene.add(sunLight);
 let isTourStarted = false;
 let collidableObjects = [];
 
+// Base Low-Poly Terrain Ground (Guarantees immediate 3D rendering)
+const groundGeo = new THREE.PlaneGeometry(300, 300, 32, 32);
+groundGeo.rotateX(-Math.PI / 2);
+const posAttr = groundGeo.attributes.position;
+for (let i = 0; i < posAttr.count; i++) {
+  const x = posAttr.getX(i);
+  const z = posAttr.getZ(i);
+  const y = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 1.5;
+  posAttr.setY(i, y);
+}
+groundGeo.computeVertexNormals();
+
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x4a8542,
+  roughness: 0.8,
+  metalness: 0.1,
+  flatShading: true
+});
+const baseGround = new THREE.Mesh(groundGeo, groundMat);
+baseGround.position.y = -0.1;
+baseGround.receiveShadow = true;
+scene.add(baseGround);
+collidableObjects.push(baseGround);
+
+controller.setCollidableObjects(collidableObjects);
+controller.position.set(0, 3, 15);
+
 // Load Low Poly GLB Model
 const loader = new GLTFLoader();
-loader.load(
-  './lowpoly.glb',
-  (gltf) => {
-    const model = gltf.scene;
-    scene.add(model);
+const modelPaths = ['./lowpoly.glb', 'lowpoly.glb', '/lowpoly.glb'];
 
-    model.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        collidableObjects.push(child);
+function tryLoadModel(index) {
+  if (index >= modelPaths.length) return;
+  loader.load(
+    modelPaths[index],
+    (gltf) => {
+      const model = gltf.scene;
+      scene.add(model);
 
-        // Flat shading for crisp low-poly aesthetic
-        if (child.material) {
-          child.material.flatShading = true;
-          child.material.needsUpdate = true;
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          collidableObjects.push(child);
+
+          if (child.material) {
+            child.material.flatShading = true;
+            child.material.needsUpdate = true;
+          }
         }
-      }
-    });
+      });
 
-    controller.setCollidableObjects(collidableObjects);
+      controller.setCollidableObjects(collidableObjects);
 
-    // Compute bounding box to set starting position
-    const bbox = new THREE.Box3().setFromObject(model);
-    const center = bbox.getCenter(new THREE.Vector3());
-    controller.position.set(center.x, 3, center.z + 15);
-  },
-  undefined,
-  (error) => {
-    console.error('Error loading GLB model:', error);
-  }
-);
+      const bbox = new THREE.Box3().setFromObject(model);
+      const center = bbox.getCenter(new THREE.Vector3());
+      controller.position.set(center.x, 3, center.z + 15);
+    },
+    undefined,
+    () => {
+      tryLoadModel(index + 1);
+    }
+  );
+}
+tryLoadModel(0);
 
 // Ambient Floating Dust / Fireflies Particle Effect
 const firefliesGeo = new THREE.BufferGeometry();
