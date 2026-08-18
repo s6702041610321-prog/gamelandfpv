@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Low Poly World - 3D FPV Walkthrough Showcase</title>
+
+  <!-- Google Fonts for Modern Gaming UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Space Grotesk', monospace;
+
+      --bg-overlay: rgba(10, 14, 26, 0.75);
+      --glass-bg: rgba(18, 26, 43, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --glass-glow: rgba(0, 240, 255, 0.15);
+
+      --accent-cyan: #00f0ff;
+      --accent-purple: #7000ff;
+      --accent-gold: #ffb700;
+      --accent-green: #00ffaa;
+      --accent-red: #ff3366;
+
+      --text-main: #ffffff;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #050811;
+      font-family: var(--font-main);
+      color: var(--text-main);
+    }
+
+    /* Canvas */
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 1;
+    }
+
+    /* Overlays Base */
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-overlay);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      display: none !important;
+    }
+
+    .overlay.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      display: flex;
+    }
+
+    /* Glassmorphism Panel */
+    .glass-panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px var(--glass-glow);
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 620px;
+      width: 90%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: modalPop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalPop {
+      0% { transform: scale(0.9) translateY(20px); opacity: 0; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    .badge {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(112, 0, 255, 0.2));
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+
+    .title {
+      font-size: 2.6rem;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .title .highlight {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin-bottom: 28px;
+    }
+
+    /* Controls Guide Box */
+    .controls-guide {
+      background: rgba(10, 15, 28, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      width: 100%;
+      margin-bottom: 30px;
+      text-align: left;
+    }
+
+    .controls-guide h3 {
+      font-size: 0.95rem;
+      color: var(--accent-cyan);
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+
+    .keys-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .key-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+    }
+
+    .key {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.8rem;
+      min-width: 28px;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    }
+
+    .key.wide {
+      min-width: 50px;
+    }
+
+    .label {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      margin-left: 4px;
+    }
+
+    /* Buttons */
+    .btn-primary {
+      position: relative;
+      background: linear-gradient(135deg, var(--accent-cyan), #0088ff);
+      border: none;
+      color: #040914;
+      font-family: var(--font-main);
+      font-size: 1.1rem;
+      font-weight: 800;
+      padding: 16px 36px;
+      border-radius: 14px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: all 0.25s ease;
+      box-shadow: 0 10px 25px rgba(0, 240, 255, 0.35);
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 14px 35px rgba(0, 240, 255, 0.5);
+      filter: brightness(1.1);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      font-family: var(--font-main);
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 12px 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--accent-cyan);
+    }
+
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    /* In-Game HUD Elements */
+    .hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 50;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .hud.hidden {
+      opacity: 0;
+    }
+
+    .crosshair.minimal .ch-line {
+      display: none;
+    }
+
+    .crosshair.minimal .ch-dot {
+      width: 6px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.9);
+      border-radius: 50%;
+    }
+
+    .ch-dot {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .text-glow {
+      color: var(--accent-green) !important;
+      text-shadow: 0 0 10px rgba(0, 255, 170, 0.4);
+    }
+
+    /* HUD Panels & Cards */
+    .hud-panel {
+      position: absolute;
+      pointer-events: auto;
+    }
+
+    .glass-card {
+      background: rgba(14, 20, 36, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 14px 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .top-left {
+      top: 24px;
+      left: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .stat-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .stat-icon {
+      font-size: 1.4rem;
+    }
+
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 28px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Minimap */
+    .top-right {
+      top: 24px;
+      right: 24px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .minimap-header {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin-bottom: 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    #compass-dir {
+      background: rgba(0, 240, 255, 0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent-cyan);
+    }
+
+    #minimap {
+      border-radius: 50%;
+      border: 2px solid rgba(0, 240, 255, 0.4);
+      background: rgba(5, 10, 20, 0.85);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+    }
+
+    /* Bottom Center State Badge */
+    .bottom-center {
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .state-badge {
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 18px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--accent-green);
+      text-shadow: 0 0 8px rgba(0, 255, 170, 0.5);
+      backdrop-filter: blur(8px);
+    }
+
+    /* Bottom Left Hint Card */
+    .bottom-left {
+      bottom: 24px;
+      left: 24px;
+      display: flex;
+      gap: 12px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .mini-key {
+      color: #fff;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      background: rgba(255,255,255,0.1);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <!-- 3D Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Start Overlay Screen -->
+  <div id="start-screen" class="overlay active">
+    <div class="glass-panel main-menu">
+      <div class="badge">3D FPV Environment Showcase</div>
+      <h1 class="title">LOW POLY <span class="highlight">WORLD TOUR</span></h1>
+      <p class="subtitle">เดินชมผลงานและบรรยากาศ 3D Low Poly ในมุมมองบุคคลที่หนึ่งได้อย่างอิสระ</p>
+
+      <div class="controls-guide">
+        <h3>🎮 ปุ่มควบคุมการเดินชม (Controls)</h3>
+        <div class="keys-grid">
+          <div class="key-item"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> <span class="label">เดินสำรวจ</span></div>
+          <div class="key-item"><span class="key wide">Mouse</span> <span class="label">หมุนมุมมอง 360°</span></div>
+          <div class="key-item"><span class="key wide">Shift</span> <span class="label">วิ่งเร็ว (Sprint)</span></div>
+          <div class="key-item"><span class="key wide">Space</span> <span class="label">กระโดด (Jump)</span></div>
+          <div class="key-item"><span class="key">C</span> / <span class="key">Ctrl</span> <span class="label">ย่อตัว (Crouch)</span></div>
+          <div class="key-item"><span class="key wide">Esc</span> <span class="label">เมนู / ปลดล็อกเมาส์</span></div>
+        </div>
+      </div>
+
+      <button id="btn-start" class="btn-primary" onclick="window.startTourDirect(event)">
+        <span class="btn-text">เริ่มเดินชมฉาก (ENTER 3D TOUR)</span>
+        <span class="btn-glow"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Minimal In-Game HUD -->
+  <div id="hud-screen" class="hud hidden">
+    <!-- Subtle Center Crosshair Dot -->
+    <div class="crosshair minimal">
+      <div class="ch-dot"></div>
+    </div>
+
+    <!-- Top Left: Environment Info Panel -->
+    <div class="hud-panel top-left glass-card">
+      <div class="stat-group">
+        <span class="stat-icon">🏞️</span>
+        <div class="stat-info">
+          <span class="stat-label">MODE</span>
+          <span class="stat-value text-glow">3D EXPLORATION</span>
+        </div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-group">
+        <span class="stat-icon">⚡</span>
+        <div class="stat-info">
+          <span class="stat-label">SPEED</span>
+          <span id="speedometer" class="stat-value">0.0 km/h</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Right: Minimap Radar & Compass -->
+    <div class="hud-panel top-right glass-card minimap-wrapper">
+      <div class="minimap-header">
+        <span id="compass-dir">N</span>
+        <span class="minimap-title">COMPASS</span>
+      </div>
+      <canvas id="minimap" width="120" height="120"></canvas>
+    </div>
+
+    <!-- Bottom Center: Movement State Badge -->
+    <div class="hud-panel bottom-center">
+      <span id="state-badge" class="state-badge">WALKING</span>
+    </div>
+
+    <!-- Bottom Left: Quick Control Hint -->
+    <div class="hud-panel bottom-left glass-card hint-card">
+      <div><span class="mini-key">WASD</span> เดิน</div>
+      <div><span class="mini-key">Shift</span> วิ่ง</div>
+      <div><span class="mini-key">Space</span> โดด</div>
+      <div><span class="mini-key">Esc</span> เมนู</div>
+    </div>
+  </div>
+
+  <!-- Menu / Pause Overlay Screen -->
+  <div id="pause-screen" class="overlay hidden">
+    <div class="glass-panel pause-menu">
+      <h2>⚙️ การตั้งค่าบรรยากาศ (TOUR MENU)</h2>
+      <p>เลือกปรับเปลี่ยนช่วงเวลาและเสียงบรรยากาศได้ตามต้องการ</p>
+
+      <div class="menu-buttons">
+        <button id="btn-resume" class="btn-primary">
+          <span class="btn-text">เดินชมต่อ (RESUME TOUR)</span>
+        </button>
+        <button id="btn-toggle-time" class="btn-secondary">
+          ☀️ Atmosphere: <span id="time-status">DAY</span>
+        </button>
+        <button id="btn-toggle-sound" class="btn-secondary">
+          🔊 Sound: <span id="sound-status">ON</span>
+        </button>
+      </div>
+    </div>
+  <script>
+    window.startTourDirect = function(e) {
+      if (e) {
+        if (e.stopPropagation) e.stopPropagation();
+        if (e.preventDefault) e.preventDefault();
+      }
+      var startScreen = document.getElementById('start-screen');
+      if (startScreen) {
+        startScreen.classList.remove('active');
+        startScreen.classList.add('hidden');
+        startScreen.style.setProperty('display', 'none', 'important');
+      }
+      var hudScreen = document.getElementById('hud-screen');
+      if (hudScreen) {
+        hudScreen.classList.remove('hidden');
+        hudScreen.style.setProperty('display', 'block', 'important');
+      }
+      if (typeof window.onTourStarted === 'function') {
+        window.onTourStarted();
+      }
+    };
+  </script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
