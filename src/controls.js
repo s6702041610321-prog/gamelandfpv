@@ -199,17 +199,26 @@ export class FPVController {
     this.position.z += this.velocity.z * delta;
     this.position.y += this.velocity.y * delta;
 
-    // 6. Vertical Collision (Ground Check Raycast)
-    const rayOrigin = this.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+    // 6. Vertical Collision (Ground Check Raycast) - Safe Ground Detection
+    const rayOrigin = new THREE.Vector3(this.position.x, this.position.y + 0.8, this.position.z);
     this.downRaycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
     if (this.collidableObjects.length > 0) {
       const intersects = this.downRaycaster.intersectObjects(this.collidableObjects, true);
 
-      if (intersects.length > 0) {
-        const groundHeight = intersects[0].point.y;
-        // Check if player position is at or below ground level
-        if (this.position.y <= groundHeight + 0.05) {
+      // Find the first valid ground surface below feet (normal pointing up, height <= feet + 0.4)
+      let validGroundHit = null;
+      for (let i = 0; i < intersects.length; i++) {
+        const hit = intersects[i];
+        if (hit.point && hit.point.y <= this.position.y + 0.4) {
+          validGroundHit = hit;
+          break;
+        }
+      }
+
+      if (validGroundHit) {
+        const groundHeight = validGroundHit.point.y;
+        if (this.position.y <= groundHeight + 0.1) {
           this.position.y = groundHeight;
           this.velocity.y = 0;
           this.isGrounded = true;
@@ -217,7 +226,6 @@ export class FPVController {
           this.isGrounded = false;
         }
       } else {
-        // Default ground safety plane at Y=0
         if (this.position.y <= 0) {
           this.position.y = 0;
           this.velocity.y = 0;
@@ -233,6 +241,11 @@ export class FPVController {
         this.isGrounded = true;
       }
     }
+
+    // Safety check against NaN
+    if (isNaN(this.position.x)) this.position.x = 0;
+    if (isNaN(this.position.y)) this.position.y = 1.7;
+    if (isNaN(this.position.z)) this.position.z = 15;
 
     // Footstep audio trigger when moving on ground
     const currentHorizSpeed = Math.hypot(this.velocity.x, this.velocity.z);
