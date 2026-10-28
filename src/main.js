@@ -112,6 +112,7 @@ function tryLoadModel(index) {
     modelPaths[index],
     (gltf) => {
       const model = gltf.scene;
+      worldModel = model;
       scene.add(model);
 
       model.traverse((child) => {
@@ -132,6 +133,8 @@ function tryLoadModel(index) {
       const bbox = new THREE.Box3().setFromObject(model);
       const center = bbox.getCenter(new THREE.Vector3());
       controller.position.set(center.x, 3, center.z + 15);
+      snapStagToGround();
+      window.__worldLoaded = true;
     },
     undefined,
     () => {
@@ -140,6 +143,79 @@ function tryLoadModel(index) {
   );
 }
 tryLoadModel(0);
+
+// ---------------------------------------------------------------------------
+// Low Poly Red Deer Stag (modelled in Blender -> public/LowPoly_Animal.glb)
+// Placement matches output/LowPolyLand_Animal_Final.blend
+// Blender (x, y, z) -> three.js (x, z, -y)
+// ---------------------------------------------------------------------------
+// Values printed by blender/assemble_scene.py (WEB_PLACEMENT line)
+const STAG_CONFIG = {
+  url: './LowPoly_Animal.glb',
+  position: new THREE.Vector3(2.2, 0.4885, 2.0), // open slope ~13 m ahead of spawn
+  // heading -50 deg + 5.65 deg tilt so all four hooves rest on the slope
+  quaternion: new THREE.Quaternion(-0.02078, -0.42211, -0.04462, 0.90521).normalize(),
+  scale: 1.2,
+  groundOffset: 0.0001                            // root height above terrain centre
+};
+let stagModel = null;
+let stagMixer = null;
+let worldModel = null;
+
+function snapStagToGround() {
+  if (!stagModel) return;
+  const targets = worldModel ? [worldModel, baseGround] : [baseGround];
+  const ray = new THREE.Raycaster(
+    new THREE.Vector3(STAG_CONFIG.position.x, 300, STAG_CONFIG.position.z),
+    new THREE.Vector3(0, -1, 0)
+  );
+  const hits = ray.intersectObjects(targets, true).filter((h) => !isStagPart(h.object));
+  if (hits.length) stagModel.position.y = hits[0].point.y + STAG_CONFIG.groundOffset;
+}
+
+function isStagPart(obj) {
+  let o = obj;
+  while (o) {
+    if (o === stagModel) return true;
+    o = o.parent;
+  }
+  return false;
+}
+
+loader.load(
+  STAG_CONFIG.url,
+  (gltf) => {
+    stagModel = gltf.scene;
+    stagModel.name = 'LowPoly_Stag';
+    stagModel.position.copy(STAG_CONFIG.position);
+    stagModel.quaternion.copy(STAG_CONFIG.quaternion);
+    stagModel.scale.setScalar(STAG_CONFIG.scale);
+
+    stagModel.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        if (child.material) {
+          child.material.flatShading = true;
+          child.material.needsUpdate = true;
+        }
+        collidableObjects.push(child); // player can't walk through the stag
+      }
+    });
+    controller.setCollidableObjects(collidableObjects);
+    scene.add(stagModel);
+    snapStagToGround();
+
+    // Idle clip baked in Blender: ear twitches + tail flicks
+    if (gltf.animations && gltf.animations.length) {
+      stagMixer = new THREE.AnimationMixer(stagModel);
+      gltf.animations.forEach((clip) => stagMixer.clipAction(clip).play());
+    }
+    window.__stagLoaded = true;
+  },
+  undefined,
+  (err) => console.error('Failed to load LowPoly_Animal.glb', err)
+);
 
 // Ambient Floating Dust / Fireflies Particle Effect
 const firefliesGeo = new THREE.BufferGeometry();
@@ -336,6 +412,13 @@ function animate() {
 
     // Update Compass Radar
     drawCompass();
+  }
+
+  // Stag idle animation + gentle breathing
+  if (stagMixer) stagMixer.update(delta);
+  if (stagModel) {
+    const breathe = 1 + Math.sin(time * 1.6) * 0.006;
+    stagModel.scale.set(STAG_CONFIG.scale, STAG_CONFIG.scale * breathe, STAG_CONFIG.scale);
   }
 
   // Animate Ambient Fireflies
